@@ -1,0 +1,49 @@
+#cloud-config
+autoinstall:
+    version: 1
+    keyboard:
+        layout: us
+    locale: en_US.UTF-8
+    timezone: Europe/Moscow
+    identity:
+        hostname: tmpl
+        username: packer
+        password: "1234567890"
+    ssh:
+        install-server: yes
+        allow-pw: yes
+    package_update: true
+    packages:
+        - net-tools
+        - chrony
+        - perl
+        - bash-completion
+        - parted
+        - sshpass
+        - network-manager
+        - openvswitch-switch
+    storage:
+        config:
+            - {ptable: gpt, path: /dev/sda, wipe: superblock, preserve: false, name: '', grub_device: true, type: disk, id: disk-sda}
+            - {device: disk-sda, size: 1048576, flag: bios_grub, number: 1, preserve: false, type: partition, id: partition-0}
+            - {device: disk-sda, size: 1073741824, wipe: superblock, flag: '', number: 2, preserve: false, type: partition, id: partition-1}
+            - {fstype: ext4, volume: partition-1, preserve: false, type: format, id: format-0}
+            - {device: disk-sda, size: -1, wipe: superblock, flag: '', number: 3, preserve: false, type: partition, id: partition-2}
+            - name: main
+              devices: [partition-2]
+              preserve: false
+              type: lvm_volgroup
+              id: lvm_volgroup-0
+            - {name: root, volgroup: lvm_volgroup-0, size: 100%, preserve: false, type: lvm_partition, id: lvm_partition-0}
+            - {fstype: ext4, volume: lvm_partition-0, preserve: false, type: format, id: format-1}
+            - {device: format-1, path: /, type: mount, id: mount-1}
+            - {device: format-0, path: /boot, type: mount, id: mount-0}
+        
+    user-data:
+        disable_root: false
+        fqdn: tmpl
+        chpasswd:
+            expire: false
+            list: 
+                - root:1234567890
+                - packer:1234567890

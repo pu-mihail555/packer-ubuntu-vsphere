@@ -1,0 +1,27 @@
+image: hashicorp/packer:1.15.1
+
+variables:
+  TMPL_IP_DISTR: TMPL_IP_ADDR_UBUNTU
+  # other variables need to be added via gitlab or where your variables stored, it can be export
+stages:
+  - validate
+  - build
+
+before_script:
+  - packer plugins install github.com/hashicorp/vsphere
+  - packer plugins install github.com/hashicorp/ansible
+
+validate:
+  stage: validate
+  script:
+    - packer validate -var-file distr/2204.hcl builder.pkr.hcl
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "push"
+
+build:
+  stage: build
+  script:
+    - packer build -force -var-file distr/2204.hcl builder.pkr.hcl
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual 

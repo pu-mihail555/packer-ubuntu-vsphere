@@ -1,0 +1,7 @@
+# /etc/chrony/chrony.conf
+
+{% for srv in time_servers %}
+server {{ srv }}
+{% endfor %}
+
+driftfile /var/lib/chrony/drift

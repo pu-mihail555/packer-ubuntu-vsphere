@@ -1,0 +1,9 @@
+# Packer cache and plugins
+packer_cache/
+.packer_plugins/
+
+# ISO files
+*.iso
+
+# OS generated files
+.DS_Store

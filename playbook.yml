@@ -1,0 +1,203 @@
+- name: Basic settings of VM
+  hosts: main
+  become: true
+  vars:
+    install_root_cert: ./certs/motivca.crt
+    install_ssh_cert: ./certs/vault_ssh_ca.pem
+    ansible_user: 'packer'
+    add_users:
+    - user_name: 'packer' 
+      user_group: users
+      user_groups: ""
+      user_comment: ''
+      user_pass: '!'
+    sudo_conf: |
+      ### New sudo starting from 2022 for packer
+      User_Alias PAC = packer
+      PAC ALL=(ALL:ALL) NOPASSWD:ALL
+    k8s:
+      users:
+      - user_name: 'k8s' 
+        user_comment: 'k8s local user'
+        user_pass: '!'
+        ssh_pub_key: |
+          ssh-rsa 
+        sudo: "k8s ALL=(ALL:ALL) NOPASSWD:ALL"
+  
+  tasks:
+    - name: set facts
+      set_fact:
+        version: "{{ lookup('ansible.builtin.env', 'VERSION') }}"
+        k8s_config: "{{ lookup('ansible.builtin.env', 'VERSION') is match('k8s-.+') }}"
+        vm_name: "{{ lookup('ansible.builtin.env', 'VM_NAME') }}"
+        time_servers: "{{ lookup('ansible.builtin.env', 'TIME_SERVERS') | split(',') }}"
+
+
+    - name: print distribution version
+      debug:
+        msg:
+          - "distribution version is {{ version }}"
+          - "kubernetes tasks is {{ k8s_config }}"
+          - "vm name - {{ vm_name }}"
+ 
+    - name: Upgrade pkg
+      ansible.builtin.package:
+        name: '*'
+        state: latest
+        update_cache: yes
+
+    - name: Make sure the folder exists
+      file:
+        path: /usr/local/share/ca-certificates
+        state: directory
+
+    - name: Copy the certificate (Debian, Ubuntu)
+      copy:
+        src: "{{ install_root_cert }}"
+        dest: "/usr/local/share/ca-certificates/{{ install_root_cert | basename }}"
+
+    - name: ca-update
+      command: update-ca-certificates
+
+    - name: Configure chrony.conf file
+      template:
+        src: templates/chrony.conf.j2
+        dest: /etc/chrony/chrony.conf
+        mode: '0644'
+
+    - name: Restart chronyd service
+      systemd: name=chronyd state=restarted
+
+    - name: add sudo packer
+      blockinfile:
+        block: "{{ sudo_conf }}"
+        path: /etc/sudoers
+        insertafter: EOF
+        marker: "## {mark} Asible sudo configuration for packer##"
+
+    - name: add config sshd 
+      blockinfile:
+        block: |
+          ### Trusted ssh CA certs
+          TrustedUserCAKeys /etc/ssh/{{ install_ssh_cert | basename }}
+        path: /etc/ssh/sshd_config
+        insertafter: '^#ListenAddress ::'
+        marker: "## {mark} Asible ssh ca configuration ##"
+
+    - name: Copy ssh ca
+      copy:
+        src: "{{ install_ssh_cert }}"
+        dest: /etc/ssh/{{ install_ssh_cert | basename }}
+
+    - name: create packer user
+      user:
+        name: '{{ item.user_name }}'
+        comment: '{{ item.user_comment }}'
+        create_home: yes
+        shell: /bin/bash
+        password: '{{ item.user_pass }}'
+      loop: '{{ add_users }}'
+    
+    - name: create k8s users
+      user:
+        name: '{{ item.user_name }}'
+        comment: '{{ item.user_comment }}'
+        create_home: yes
+        shell: /bin/bash
+        password: '{{ item.user_pass }}'
+      loop: '{{ k8s.users }}'
+      when: k8s_config
+
+    - name: add sudo for k8s users
+      blockinfile:
+        block: "{{ item.sudo }}"
+        path: /etc/sudoers
+        insertafter: EOF
+        marker: "## {mark} Ansible sudo configuration for kubernetes user {{ item.user_name }}##"
+      loop: '{{ k8s.users }}'
+      when: k8s_config
+
+    - name: create ssh dir for k8s users
+      file:
+        path: '/home/{{ item.user_name }}/.ssh'
+        state: directory
+        owner: '{{ item.user_name }}'
+        group: '{{ item.user_name }}'
+        mode: '0700'
+      loop: '{{ k8s.users }}'
+      when: k8s_config
+
+    - name: copy ssh key for k8s users
+      copy:
+        content: "{{ item.ssh_pub_key }}"
+        dest: "/home/{{ item.user_name }}/.ssh/authorized_keys"
+        owner: '{{ item.user_name }}'
+        group: '{{ item.user_name }}'
+        mode: '0600'
+      loop: '{{ k8s.users }}'
+      when: k8s_config
+
+    - name: Set password to root
+      user:
+        name: root
+        password: "{{ '1234567890' | password_hash('sha512') }}"
+
+    - name: Ensure root login via SSH is enabled
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^PermitRootLogin'
+        line: 'PermitRootLogin yes'
+        state: present
+
+    - name: Ensure password authentication is enabled
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^PasswordAuthentication'
+        line: 'PasswordAuthentication yes'
+        state: present
+
+    - name: cloud-init clean
+      shell: cloud-init clean
+
+    - name: ubuntu issue fix 
+      lineinfile:
+        path: /etc/issue
+        regexp: '^Ubuntu'
+        line: 'Ubuntu 18.04.4 LTS'
+        state: present
+      when: ansible_distribution == 'Ubuntu'
+
+    - name: delete default netplan config
+      file:
+        path: /etc/netplan/{{ item }}
+        state: absent
+      loop:
+        - 00-installer-config.yaml
+        - 50-cloud-init.yaml
+
+    - name: vm info
+      community.vmware.vmware_vm_info:
+        hostname: "{{ lookup('ansible.builtin.env', 'VCENTER_SERVER') }}"
+        username: "{{ lookup('ansible.builtin.env', 'VCENTER_USERNAME') }}"
+        password: "{{ lookup('ansible.builtin.env', 'VCENTER_PASSWORD') }}"
+        validate_certs: no
+        vm_name: '{{ vm_name }}'
+      delegate_to: localhost
+      register: vm_reg_info
+    
+    - name: shutdown vm 
+      community.general.shutdown:
+        delay: 120
+
+    - name: delete network adapters
+      community.vmware.vmware_guest_network:
+        hostname: "{{ lookup('ansible.builtin.env', 'VCENTER_SERVER') }}"
+        username: "{{ lookup('ansible.builtin.env', 'VCENTER_USERNAME') }}"
+        password: "{{ lookup('ansible.builtin.env', 'VCENTER_PASSWORD') }}"
+        validate_certs: no
+        datacenter: "{{ lookup('ansible.builtin.env', 'VCENTER_DATACENTER') }}"
+        name: '{{ vm_name }}'
+        state: absent
+        mac_address: "{{ item }}"
+      loop: '{{ vm_reg_info.virtual_machines.0.mac_address }}'
+      delegate_to: localhost
