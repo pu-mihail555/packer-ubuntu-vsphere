@@ -2,8 +2,8 @@
   hosts: main
   become: true
   vars:
-    install_root_cert: ./certs/motivca.crt
-    install_ssh_cert: ./certs/vault_ssh_ca.pem
+    install_root_cert: ./certs/corporate_cert.crt
+    install_ssh_cert: ./certs/ssh_ca.pem
     ansible_user: 'packer'
     add_users:
     - user_name: 'packer' 
