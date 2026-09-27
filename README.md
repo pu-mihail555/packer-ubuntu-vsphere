@@ -13,8 +13,8 @@ Ensure you have Packer installed (tested with version `1.10.3`) along with the r
 
 Install the plugins using the following commands:
 ```bash
-packer plugins install github.com/hashicorp/vsphere
-packer plugins install github.com/hashicorp/ansible
+packer plugins install [github.com/hashicorp/vsphere](https://github.com/hashicorp/vsphere)
+packer plugins install [github.com/hashicorp/ansible](https://github.com/hashicorp/ansible)
 ```
 
 ## Usage
@@ -35,7 +35,12 @@ export VCENTER_FOLDER=""
 export ISO_PATH=""
 ```
 
-### Step 2: Build the Image
+### Step 2: Certificates Configuration (Optional)
+The project supports automated installation of custom certificates during the build process via the `certs/` directory:
+* **Corporate Root Certificates:** You can install your own corporate root certificate. Replace the dummy `.crt` file in the `certs/` directory with your actual certificate, and it will be automatically added to the trusted root store on the VM.
+* **SSH CA Certificates:** You can also configure SSH certificate-based authentication. Place your SSH CA certificate (the `.pem` file) in the `certs/` directory. If you do not use SSH certificates in your infrastructure, you can safely remove this file and its related references from the Ansible playbook.
+
+### Step 3: Build the Image
 Navigate to the root directory of the repository and run the build command:
 ```bash
 packer build -force -on-error=ask -var-file distr_vars/2204.hcl builder.pkr.hcl 
@@ -44,7 +49,7 @@ packer build -force -on-error=ask -var-file distr_vars/2204.hcl builder.pkr.hcl
 **Command Flags Explanation:**
 * `-force`: Forces the overwrite of existing virtual machine templates with the same name.
 * `-on-error=ask`: Pauses the build if an error occurs and provides a prompt to troubleshoot: `[c] Clean up and exit, [a] abort without cleanup, or [r] retry step`.
-* `-var-file`: Specifies the variables file to be used during the build process (e.g., `distr/2204.hcl`).
+* `-var-file`: Specifies the variables file to be used during the build process (e.g., `distr_vars/2204.hcl`).
 
 ---
 
@@ -61,8 +66,8 @@ packer build -force -on-error=ask -var-file distr_vars/2204.hcl builder.pkr.hcl
 
 Установите плагины следующими командами:
 ```bash
-packer plugins install github.com/hashicorp/vsphere
-packer plugins install github.com/hashicorp/ansible
+packer plugins install [github.com/hashicorp/vsphere](https://github.com/hashicorp/vsphere)
+packer plugins install [github.com/hashicorp/ansible](https://github.com/hashicorp/ansible)
 ```
 
 ## Использование
@@ -83,7 +88,12 @@ export VCENTER_FOLDER=""
 export ISO_PATH=""
 ```
 
-### Шаг 2: Сборка образа
+### Шаг 2: Настройка сертификатов (опционально)
+Проект поддерживает автоматическое добавление ваших сертификатов при сборке образа через папку `certs/`:
+* **Корпоративные корневые сертификаты:** Поддерживается установка собственных корневых сертификатов. Замените файл-заглушку `.crt` в папке `certs/` на ваш реальный сертификат, и он будет автоматически добавлен в доверенные на виртуальной машине.
+* **SSH CA сертификаты:** Для безопасного подключения к хостам вы можете использовать SSH-сертификаты. Добавьте ваш SSH CA сертификат (файл `.pem`) в папку `certs/`. Если в вашей инфраструктуре не используются SSH-сертификаты, вы можете просто удалить этот файл и убрать соответствующие задачи из плейбука Ansible.
+
+### Шаг 3: Сборка образа
 Перейдите в корень директории и выполните команду сборки:
 ```bash
 packer build -force -on-error=ask -var-file distr_vars/2204.hcl builder.pkr.hcl 
@@ -92,4 +102,4 @@ packer build -force -on-error=ask -var-file distr_vars/2204.hcl builder.pkr.hcl
 **Описание используемых флагов:**
 * `-force` — используется для перезаписи уже существующих шаблонов виртуальных машин с таким же именем.
 * `-on-error=ask` — при возникновении ошибки сборка ставится на паузу и пользователю предлагается выбор дальнейших действий: `[c] Clean up and exit, [a] abort without cleanup, or [r] retry step`.
-* `-var-file` — используется для указания файла переменных, который будет применен во время сборки образа (в данном случае из папки `distr`).
+* `-var-file` — используется для указания файла переменных, который будет применен во время сборки образа (в данном случае из папки `distr_vars`).
